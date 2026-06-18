@@ -1,0 +1,58 @@
+{
+  "tenure": 60,
+  "MonthlyCharges": 45.5,
+  "TotalCharges": 2730.0,
+  "Contract": "Two year",
+  "InternetService": "DSL",
+  "OnlineSecurity": "Yes",
+  "TechSupport": "Yes"
+}
+
+
+
+{
+  "tenure": 1,
+  "MonthlyCharges": 85.0,
+  "TotalCharges": 85.0,
+  "Contract": "Month-to-month",
+  "InternetService": "Fiber optic",
+  "OnlineSecurity": "No",
+  "TechSupport": "No"
+}
+
+
+
+{
+  "tenure": 12,
+  "MonthlyCharges": 70.3,
+  "TotalCharges": 843.6,
+  "Contract": "One year",
+  "InternetService": "Fiber optic",
+  "OnlineSecurity": "No",
+  "TechSupport": "Yes"
+}
+
+
+{
+  "tenure": 72,
+  "MonthlyCharges": 110.5,
+  "TotalCharges": 7960.0,
+  "Contract": "Two year",
+  "InternetService": "Fiber optic",
+  "OnlineSecurity": "Yes",
+  "TechSupport": "Yes"
+}
+
+
+
+
+
+{
+  "tenure": 3,
+  "MonthlyCharges": 95.0,
+  "TotalCharges": 285.0,
+  "Contract": "Month-to-month",
+  "InternetService": "Fiber optic",
+  "OnlineSecurity": "No",
+  "TechSupport": "No"
+}
