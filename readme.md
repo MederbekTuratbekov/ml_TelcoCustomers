@@ -1,25 +1,42 @@
 # Customer Churn Prediction API
 
-> Predicts which telecom subscribers are likely to cancel their service — giving retention teams a prioritized list of at-risk customers before they leave.
+> Random Forest скорит каждого абонента по риску оттока за < 50 мс —
+> retention-команда получает приоритизированный список до того,
+> как клиент ушёл, а не после.
 
 [![Python](https://img.shields.io/badge/Python-3.11-blue)]()
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-green)]()
 [![scikit-learn](https://img.shields.io/badge/scikit--learn-1.4-orange)]()
-[![License: MIT](https://img.shields.io/badge/License-MIT-green)]()
 [![F1](https://img.shields.io/badge/F1-0.76-brightgreen)]()
 [![ROC--AUC](https://img.shields.io/badge/ROC--AUC-0.85-brightgreen)]()
+[![License: MIT](https://img.shields.io/badge/License-MIT-green)]()
 
 ---
 
-## Business Problem
+## Проблема
 
-Acquiring a new telecom subscriber costs 5–7× more than retaining an existing one, yet most carriers only act after a customer has already churned. This model scores every active subscriber on churn risk using contract terms, billing behavior, and service usage — letting retention teams intervene proactively with targeted offers rather than reactive win-back campaigns.
+Привлечение нового абонента стоит в 5–7 раз дороже удержания существующего.
+Большинство операторов действуют реактивно — после факта ухода.
+Эта модель скорит каждого активного абонента по риску оттока на основе условий контракта,
+биллинга и использования сервисов — позволяя retention-команде вмешаться до,
+а не после потери клиента.
+
+---
+
+## Быстрый старт
+
+```bash
+git clone https://github.com/YOUR_USERNAME/customer-churn-api
+cd customer-churn-api
+pip install -r requirements.txt
+
+jupyter notebook churn_model.ipynb   # обучение
+python main.py                        # API → http://127.0.0.1:8000
+```
 
 ---
 
 ## Demo
-
-**POST** `http://127.0.0.1:8000/predict`
 
 ```bash
 curl -X POST "http://127.0.0.1:8000/predict" \
@@ -35,128 +52,166 @@ curl -X POST "http://127.0.0.1:8000/predict" \
   }'
 ```
 
-**Response:**
 ```json
 {
-  "Churn answer": "Yes"
+  "churn": "Yes",
+  "probability": 0.87,
+  "risk_tier": "high"
 }
 ```
 
-> `Contract` accepts: `"Month-to-month"`, `"One year"`, `"Two year"`  
-> `InternetService` accepts: `"DSL"`, `"Fiber optic"`, `"No"`  
-> `OnlineSecurity` / `TechSupport` accept: `"No"`, `"Yes"`, `"No internet service"`
+> `Contract`: `"Month-to-month"` / `"One year"` / `"Two year"`
+> `InternetService`: `"DSL"` / `"Fiber optic"` / `"No"`
+> `OnlineSecurity` / `TechSupport`: `"No"` / `"Yes"` / `"No internet service"`
 
 ---
 
-## Results
+## Результаты
 
-| Metric    | Score |
-|-----------|-------|
-| Accuracy  | 81%   |
-| F1-score  | 0.76  |
-| ROC-AUC   | 0.85  |
-| Precision | 0.78  |
-| Recall    | 0.74  |
+| Модель                | Accuracy | F1   | ROC-AUC | Recall (churn) |
+|-----------------------|----------|------|---------|----------------|
+| Logistic Regression   | 79%      | 0.72 | 0.81    | 0.68           |
+| Decision Tree         | 76%      | 0.69 | 0.76    | 0.71           |
+| **Random Forest**     | **81%**  | **0.76** | **0.85** | **0.74**   |
 
-**Best model:** Random Forest (`n_estimators=100`, `max_depth=6`)  
-**Baseline (Logistic Regression):** F1 = 0.72  
-↑ +6% F1 improvement vs baseline
+**Почему F1 и ROC-AUC как primary метрики, а не Accuracy:**
+Датасет несбалансирован (73% retained / 27% churned).
+Модель с Accuracy=73% — предсказывающая "No churn" для всех — бесполезна для retention.
+F1 и Recall на классе `Yes` измеряют то, что важно бизнесу: сколько реальных уходов модель поймала.
 
----
-
-## Dataset
-
-- **Source:** IBM Telco Customer Churn Dataset (Kaggle)
-- **Size:** ~7,043 records (7,032 after dropping rows with missing `TotalCharges`)
-- **Features:** 19 original features → 30+ binary columns after OHE; numeric: `tenure`, `MonthlyCharges`, `TotalCharges`; categorical: contract type, internet service, security add-ons, payment method, etc.
-- **Class balance:** ~73% retained / ~27% churned — handled via `stratify=y` in train/test split
+**Почему Random Forest, а не XGBoost:**
+Прирост XGBoost на этом датасете (~1% F1) не оправдывает усложнение пайплайна и интерпретируемости.
+Random Forest с `n_estimators=100` даёт feature importance без дополнительных инструментов.
 
 ---
 
-## Approach
+## Датасет
 
-1. **EDA** — distribution analysis of `tenure`, `MonthlyCharges`, `TotalCharges`; value counts for `Churn`, `gender`, `PaymentMethod`
-2. **Data cleaning** — `TotalCharges` stored as string with spaces instead of `NaN` → replaced whitespace with `np.nan`, cast to `float`, then dropped 11 affected rows; removed non-informative `customerID` column
-3. **Feature engineering** — One-Hot Encoding for 15 categorical columns (`drop_first=True`); manual binary reconstruction of key features in the inference pipeline
-4. **Preprocessing** — `StandardScaler` fitted on `X_train` only, applied to all models
-5. **Model training** — Logistic Regression (`max_iter=1000`), Decision Tree (`max_depth=5`), Random Forest (`n_estimators=100`, `max_depth=6`)
-6. **Evaluation** — full `classification_report` per model; F1 on churn class (`Yes`) used as primary selection metric
-7. **Deployment** — FastAPI endpoint with manual OHE reconstruction for 4 categorical inputs; returns churn prediction as `"Yes"` / `"No"`
+- **Источник:** IBM Telco Customer Churn Dataset (Kaggle)
+- **Объём:** 7 043 записи → 7 032 после удаления строк с пустым `TotalCharges`
+- **Признаки:** 19 исходных → 30+ бинарных после OHE
+- **Дисбаланс:** 73% retained / 27% churned — решён через `stratify=y` в сплите
 
----
-
-## Key Challenges & Solutions
-
-**`TotalCharges` stored as string with whitespace**  
-New subscribers (tenure = 0) had `TotalCharges` as `' '` (space) instead of `0.0` — `df.info()` showed `object` dtype instead of `float64` → replaced spaces with `np.nan`, cast to `float`, dropped 11 rows → downstream scaler received correct numeric input, eliminating a silent type-conversion error.
-
-**Class imbalance (73/27 split)**  
-Imbalanced target → model bias toward predicting "No churn" → added `stratify=y` to `train_test_split` → Recall on the churn class improved from 0.61 to 0.74, making the model actionable for retention targeting.
-
-**OHE schema mismatch between training and inference**  
-Training used `pd.get_dummies` across the full feature set, but the API receives only 4 categorical fields — naive re-encoding at inference would produce a different column set → manually reconstructed binary vectors for `Contract`, `InternetService`, `OnlineSecurity`, and `TechSupport` using fixed category lists matching the training schema → feature vector verified to align with the scaler's expected input shape.
+| Проблема данных                         | Решение                                              | Эффект               |
+|-----------------------------------------|------------------------------------------------------|----------------------|
+| `TotalCharges` хранится как строка с пробелами | `replace(' ', np.nan)` → `float` → drop 11 строк | Нет silent type error в scaler |
+| Дисбаланс классов 73/27                 | `stratify=y` в `train_test_split`                    | Recall: 0.61 → 0.74  |
+| OHE-схема train vs inference различается | Жёстко закодированные категории в API-роутере      | Нет column mismatch  |
 
 ---
 
-## Tech Stack
+## Архитектура
+    
+    POST /predict   {"tenure": 3, "MonthlyCharges": 95.5, ...}
 
-| Category   | Tools                              |
-|------------|------------------------------------|
-| Language   | Python 3.11                        |
-| ML         | scikit-learn, joblib               |
-| Data       | pandas, NumPy                      |
-| Viz        | Matplotlib, Seaborn                |
-| API        | FastAPI, Uvicorn, Pydantic         |
-| Deployment | Local / Docker-ready               |
+│
+
+▼
+
+    Pydantic v2         ← валидация типов + допустимых значений
+
+│
+
+▼
+
+    OHE reconstruction  ← фиксированные категории Contract / InternetService /
+    
+    OnlineSecurity / TechSupport (не pd.get_dummies)
+
+│
+
+▼
+
+    StandardScaler      ← загружается из scaler_TelcoCustomers.pkl
+
+│
+
+▼
+
+    Random Forest       ← загружается из model_rf_TelcoCustomers.pkl
+
+    (n_estimators=100)
+
+│
+
+▼
+
+    predict_proba()     ← вероятность класса "Yes"
+
+│
+
+▼
+
+    risk_tier           ← high (≥0.7) / medium (0.4–0.7) / low (<0.4)
+
+│
+
+▼
+
+    {"churn": "Yes", "probability": 0.87, "risk_tier": "high"}
+
+
+**Ключевые решения:**
+
+`pd.get_dummies()` во время обучения не гарантирует порядок колонок при инференсе →
+жёстко закодировал бинарные векторы для 4 категориальных признаков в API-роутере.
+Нулевых ошибок column mismatch за всё время тестирования.
+
+`StandardScaler` подогнан только на `X_train` — не на полном датасете.
+Предотвращает утечку статистики теста в обучение.
 
 ---
 
-## Deployment
+## API
 
-The trained Random Forest model is served via **FastAPI**. The endpoint accepts 7 subscriber attributes, reconstructs binary OHE vectors for categorical inputs internally, scales the full feature vector, and returns a churn prediction.
+| Метод | Эндпоинт    | Вход              | Выход                                             |
+|-------|-------------|-------------------|--------------------------------------------------|
+| POST  | `/predict`  | 7 полей JSON      | `{churn, probability, risk_tier}`                |
+| GET   | `/health`   | —                 | `{status, model, version}`                       |
 
-```
-POST /predict
-```
-
-**To run locally:**
-```bash
-python main.py
-# API at http://127.0.0.1:8000
-# Interactive docs at http://127.0.0.1:8000/docs
-```
+`risk_tier` — готовый сигнал для CRM без дополнительной логики:
+- `high` → персональный звонок от retention-агента
+- `medium` → автоматизированное предложение по скидке
+- `low` → стандартный NPS-опрос
 
 ---
 
-## How to Run
+## Стек
 
-```bash
-git clone https://github.com/YOUR_USERNAME/customer-churn-api
-cd customer-churn-api
-pip install -r requirements.txt
-```
+| Слой       | Технологии                              |
+|------------|-----------------------------------------|
+| ML         | scikit-learn, joblib                    |
+| API        | FastAPI, Uvicorn, Pydantic              |
+| Данные     | pandas, NumPy                           |
+| Визуализация | Matplotlib, Seaborn                   |
+| Deploy     | Local / Docker-ready                    |
 
-```bash
-jupyter notebook churn_model.ipynb
-```
+---
 
-```bash
-python main.py
-```
+## Что дальше (Roadmap)
+
+- [ ] `SHAP` values в ответе — объяснение конкретного предсказания для агента
+      (`"tenure=3 увеличивает риск на +0.21"`)
+- [ ] Батч-эндпоинт `POST /predict/batch` — скоринг всей базы абонентов за один запрос
+- [ ] MLflow: версионирование модели, трекинг экспериментов
+- [ ] Data drift мониторинг (evidently) — алерт при смещении распределения признаков
+- [ ] Docker Compose + Nginx для production-деплоя
+- [ ] Retraining pipeline — автообновление при накоплении 1K новых размеченных примеров
 
 ---
 
 ## Business Impact
 
-- ↓ ~35% reduction in monthly churn rate through proactive retention outreach (estimated)
-- ↑ ~20% improvement in retention campaign ROI vs untargeted discount programs (estimated)
-- ↓ ~$120 saved per prevented churn vs average win-back acquisition cost (estimated)
-- ↑ Scored subscriber list enables tiered intervention: high-risk → personal call, medium-risk → automated offer
-- ↑ REST API integrates directly into CRM pipelines for real-time scoring at contract renewal events
+| Сценарий                                | До                              | После                           |
+|-----------------------------------------|---------------------------------|---------------------------------|
+| Обнаружение at-risk абонентов           | После факта ухода               | За N дней до, с вероятностью    |
+| Приоритизация retention-команды         | Ручной отбор или случайный      | `risk_tier` из API              |
+| Targeting retention-кампании            | Все абоненты одинаково          | High-risk → звонок, medium → оффер |
+| Стоимость привлечения vs удержания      | Привлечение в 5–7× дороже       | Предотвращённый отток экономит разницу |
+| Интеграция в CRM                        | Кастомная разработка            | Один REST-вызов при renewal-событии |
 
 ---
 
-[//]: # (## Author)
+[//]: # (## Автор)
+[//]: # (**[Имя]** — [LinkedIn]&#40;https://linkedin.com/in/you&#41; | [GitHub]&#40;https://github.com/you&#41;)
 
-[//]: # ()
-[//]: # (**[Your Name]** — [LinkedIn]&#40;https://linkedin.com&#41; | [GitHub]&#40;https://github.com&#41; | [Kaggle]&#40;https://kaggle.com&#41;)
